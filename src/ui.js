@@ -641,50 +641,70 @@ function patchAllListItems(apply) {
  * @param {MutationRecord[]} mutations
  */
 function onCharListMutation(mutations) {
-    if (!nicknameSettings.useForCharList) return;
+    const charListEnabled = nicknameSettings.useForCharList;
+    const chatEnabled = nicknameSettings.useForChatMessages;
+    if (!charListEnabled && !chatEnabled) return;
 
-    const processedCards = new Set(); // Evita bucles infinitos en el mismo ciclo
+    const processedCards = new Set(); 
+    const processedMes = new Set(); // Para evitar bucles en el chat
 
     for (const mutation of mutations) {
-        // 1. Detectar si el tema actualizó el texto directamente
         let targetElement = mutation.target.nodeType === Node.TEXT_NODE ? mutation.target.parentElement : mutation.target;
 
         if (targetElement instanceof HTMLElement) {
-            if (targetElement.matches('.ch_name, .dsc-row-name, .dsc-dv-name, .dsc-friend-name, .dsc-user-name')) {
-                // AQUÍ: Añadimos #dsc-user para que detecte tu panel de usuario
+            // 1. Proteger Barra Lateral y Avatares
+            if (charListEnabled && targetElement.matches('.ch_name, .dsc-row-name, .dsc-dv-name, .dsc-friend-name, .dsc-user-name')) {
                 const card = targetElement.closest('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend, .avatar-container, #dsc-user');
                 if (card && !processedCards.has(card)) {
                     processedCards.add(card);
-                    // AQUÍ: Añadimos #dsc-user para enviarlo a la función de Personas
                     if (card.matches('.avatar-container, #dsc-user')) {
                         applyNicknameToPersonaItem(card, true);
                     } else {
                         applyNicknameToCharItem(card, true);
                     }
                 }
-                continue;
+            }
+            
+            // 2. Proteger Mensajes del Chat contra el tema
+            if (chatEnabled && targetElement.matches('.name_text')) {
+                const mes = targetElement.closest('.mes');
+                if (mes && !processedMes.has(mes)) {
+                    processedMes.add(mes);
+                    applyNicknameToMesElement(mes, true);
+                }
             }
         }
 
-        // 2. Detectar nodos HTML nuevos (lógica original adaptada)
+        // Detectar nodos HTML nuevos
         for (const node of mutation.addedNodes) {
             if (!(node instanceof HTMLElement)) continue;
 
-            if (node.matches('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend')) {
-                if (!processedCards.has(node)) applyNicknameToCharItem(node, true);
-            } else {
-                node.querySelectorAll('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend').forEach(el => {
-                    if (!processedCards.has(el)) applyNicknameToCharItem(/** @type {HTMLElement} */(el), true);
-                });
+            if (charListEnabled) {
+                if (node.matches('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend')) {
+                    if (!processedCards.has(node)) applyNicknameToCharItem(node, true);
+                } else {
+                    node.querySelectorAll('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend').forEach(el => {
+                        if (!processedCards.has(el)) applyNicknameToCharItem(/** @type {HTMLElement} */(el), true);
+                    });
+                }
+
+                if (node.matches('.avatar-container, #dsc-user')) {
+                    if (!processedCards.has(node)) applyNicknameToPersonaItem(node, true);
+                } else {
+                    node.querySelectorAll('.avatar-container, #dsc-user').forEach(el => {
+                        if (!processedCards.has(el)) applyNicknameToPersonaItem(/** @type {HTMLElement} */(el), true);
+                    });
+                }
             }
 
-            // AQUÍ: Añadimos #dsc-user para nuevos renders
-            if (node.matches('.avatar-container, #dsc-user')) {
-                if (!processedCards.has(node)) applyNicknameToPersonaItem(node, true);
-            } else {
-                node.querySelectorAll('.avatar-container, #dsc-user').forEach(el => {
-                    if (!processedCards.has(el)) applyNicknameToPersonaItem(/** @type {HTMLElement} */(el), true);
-                });
+            if (chatEnabled) {
+                if (node.matches('.mes')) {
+                    if (!processedMes.has(node)) applyNicknameToMesElement(node, true);
+                } else {
+                    node.querySelectorAll('.mes').forEach(el => {
+                        if (!processedMes.has(el)) applyNicknameToMesElement(/** @type {HTMLElement} */(el), true);
+                    });
+                }
             }
         }
     }
@@ -790,13 +810,16 @@ function applyNicknameToMesElement(mesEl, apply = true) {
     const nameTextEl = mesEl.querySelector('.ch_name .name_text');
     if (!nameTextEl || !(nameTextEl instanceof HTMLElement)) return;
 
+    // Buscar el nodo de texto puro
+    let targetTextNode = Array.from(nameTextEl.childNodes).reverse().find(n => n.nodeType === Node.TEXT_NODE && n.nodeValue.trim() !== '');
+
     if (!apply) {
-        // Restore original name if we stored it
-        const original = mesEl.dataset.nicknameOriginalName;
-        if (original !== undefined) {
-            nameTextEl.textContent = original;
+        // Usamos una nueva variable única: nicknameExtOriginal
+        const original = mesEl.dataset.nicknameExtOriginal;
+        if (original !== undefined && targetTextNode) {
+            targetTextNode.nodeValue = original;
             nameTextEl.removeAttribute('title');
-            delete mesEl.dataset.nicknameOriginalName;
+            delete mesEl.dataset.nicknameExtOriginal;
         }
         return;
     }
@@ -804,14 +827,28 @@ function applyNicknameToMesElement(mesEl, apply = true) {
     const nickname = resolveNicknameForMesElement(mesEl);
     if (!nickname) return;
 
-    // Store original only once (don't overwrite if already stored)
-    if (mesEl.dataset.nicknameOriginalName === undefined) {
-        mesEl.dataset.nicknameOriginalName = nameTextEl.textContent;
+    if (!targetTextNode) {
+        targetTextNode = document.createTextNode('');
+        nameTextEl.appendChild(targetTextNode);
     }
-    nameTextEl.textContent = nickname;
+
+    // --- PREVENCIÓN DE BUCLE INFINITO ---
+    if (targetTextNode.nodeValue === nickname) {
+        return;
+    }
+
+    // Guardar el nombre original usando la variable única de la extensión
+    if (mesEl.dataset.nicknameExtOriginal === undefined) {
+        // Si el tema ya guardó el original, lo aprovechamos
+        const themeOriginal = mesEl.getAttribute('original-name') || mesEl.getAttribute('data-nickname-original-name');
+        mesEl.dataset.nicknameExtOriginal = themeOriginal ? themeOriginal : targetTextNode.nodeValue;
+    }
+    
+    targetTextNode.nodeValue = nickname;
+    
     const isUser = mesEl.getAttribute('is_user') === 'true';
     const label = isUser ? 'Persona' : 'Character';
-    nameTextEl.title = `[${label}] ${mesEl.dataset.nicknameOriginalName}`;
+    nameTextEl.title = `[${label}] ${mesEl.dataset.nicknameExtOriginal.trim()}`;
 }
 
 /**

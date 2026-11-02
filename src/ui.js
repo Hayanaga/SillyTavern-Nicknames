@@ -518,7 +518,7 @@ let charListObserver = null;
  */
 function applyNicknameToCharItem(el, apply) {
     const context = getContext();
-    const chNameEl = el.querySelector('.ch_name, .dsc-row-name, .dsc-dv-name');
+    const chNameEl = el.querySelector('.ch_name, .dsc-row-name, .dsc-dv-name, .dsc-friend-name');
     if (!chNameEl || !(chNameEl instanceof HTMLElement)) return;
 
     if (!apply) {
@@ -531,11 +531,17 @@ function applyNicknameToCharItem(el, apply) {
         return;
     }
 
-    const chid = Number(el.getAttribute('data-chid'));
-    const char = context.characters[chid];
-    if (!char?.avatar) return;
+    let charAvatar = null;
+    if (el.hasAttribute('data-chid')) {
+       const chid = Number(el.getAttribute('data-chid'));
+       charAvatar = context.characters[chid]?.avatar;
+    } else {
+        charAvatar = el.getAttribute('data-avatar');
+    }
 
-    const result = getNicknameForCharAvatar(char.avatar);
+    if (!charAvatar) return;
+
+    const result = getNicknameForCharAvatar(charAvatar);
     if (result.context === ContextLevel.NONE) return;
 
     if (el.dataset.nicknameOriginalName === undefined) {
@@ -585,7 +591,7 @@ function applyNicknameToPersonaItem(el, apply) {
  * @param {boolean} apply
  */
 function patchAllListItems(apply) {
-    document.querySelectorAll('#rm_print_characters_block .character_select').forEach(el => {
+    document.querySelectorAll('#rm_print_characters_block .character_select, .dsc-dm-list .dsc-dm, .dsc-dv-card, .dsc-friend').forEach(el => {
         applyNicknameToCharItem(/** @type {HTMLElement} */ (el), apply);
     });
     document.querySelectorAll('#user_avatar_block .avatar-container').forEach(el => {
@@ -603,10 +609,10 @@ function onCharListMutation(mutations) {
         for (const node of mutation.addedNodes) {
             if (!(node instanceof HTMLElement)) continue;
             // Character list items added directly
-            if (node.matches('.character_select')) {
+            if (node.matches('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend')) {
                 applyNicknameToCharItem(node, true);
             } else {
-                node.querySelectorAll('.character_select').forEach(el => {
+                node.querySelectorAll('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend').forEach(el => {
                     applyNicknameToCharItem(/** @type {HTMLElement} */ (el), true);
                 });
             }

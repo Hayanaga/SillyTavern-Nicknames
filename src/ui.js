@@ -695,13 +695,8 @@ export function refreshCharacterList() {
     if (enabled) {
         if (!charListObserver) {
             charListObserver = new MutationObserver(onCharListMutation);
-            // Vigilar TODO el body y los cambios directos de texto (characterData)
-            // Esto es crucial para ganarle al tema personalizado cuando hace click/hover
-            charListObserver.observe(document.body, { 
-                childList: true, 
-                subtree: true, 
-                characterData: true 
-            });
+            // Vigilar TODO el body y los cambios de texto (characterData) para combatir el tema
+            charListObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
         }
     } else {
         charListObserver?.disconnect();

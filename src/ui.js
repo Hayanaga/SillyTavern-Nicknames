@@ -518,7 +518,7 @@ let charListObserver = null;
  */
 function applyNicknameToCharItem(el, apply) {
     const context = getContext();
-    const chNameEl = el.querySelector('.ch_name');
+    const chNameEl = el.querySelector('.ch_name, .dsc-row-name, .dsc-dv-name');
     if (!chNameEl || !(chNameEl instanceof HTMLElement)) return;
 
     if (!apply) {
@@ -551,7 +551,7 @@ function applyNicknameToCharItem(el, apply) {
  * @param {boolean} apply
  */
 function applyNicknameToPersonaItem(el, apply) {
-    const chNameEl = el.querySelector('.ch_name');
+    const chNameEl = el.querySelector('.ch_name, .dsc-user-name');
     if (!chNameEl || !(chNameEl instanceof HTMLElement)) return;
 
     if (!apply) {

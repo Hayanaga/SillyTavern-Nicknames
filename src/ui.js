@@ -553,6 +553,11 @@ function applyNicknameToCharItem(el, apply) {
         chNameEl.appendChild(targetTextNode);
     }
 
+    // --- PREVENCIÓN DE BUCLE INFINITO ---
+    if (targetTextNode.nodeValue === result.name) {
+        return; 
+    }
+
     if (el.dataset.nicknameOriginalName === undefined) {
         el.dataset.nicknameOriginalName = targetTextNode.nodeValue;
     }
@@ -601,6 +606,11 @@ function applyNicknameToPersonaItem(el, apply) {
     if (!targetTextNode) {
         targetTextNode = document.createTextNode('');
         chNameEl.appendChild(targetTextNode);
+    }
+
+    // --- PREVENCIÓN DE BUCLE INFINITO ---
+    if (targetTextNode.nodeValue === result.name) {
+        return; 
     }
 
     if (el.dataset.nicknameOriginalName === undefined) {

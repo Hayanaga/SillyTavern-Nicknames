@@ -681,6 +681,11 @@ function onCharListMutation(mutations) {
  * Starts a MutationObserver to patch items as they are rendered.
  * When disabled, restores all original names and disconnects the observer.
  */
+/**
+ * Updates character and persona list display to show nicknames.
+ * Starts a MutationObserver to patch items as they are rendered.
+ * When disabled, restores all original names and disconnects the observer.
+ */
 export function refreshCharacterList() {
     const enabled = nicknameSettings.useForCharList;
 
@@ -690,10 +695,13 @@ export function refreshCharacterList() {
     if (enabled) {
         if (!charListObserver) {
             charListObserver = new MutationObserver(onCharListMutation);
-            const charBlock = document.getElementById('rm_print_characters_block');
-            const personaBlock = document.getElementById('user_avatar_block');
-            if (charBlock) charListObserver.observe(charBlock, { childList: true, subtree: true });
-            if (personaBlock) charListObserver.observe(personaBlock, { childList: true, subtree: true });
+            // Vigilar TODO el body y los cambios directos de texto (characterData)
+            // Esto es crucial para ganarle al tema personalizado cuando hace click/hover
+            charListObserver.observe(document.body, { 
+                childList: true, 
+                subtree: true, 
+                characterData: true 
+            });
         }
     } else {
         charListObserver?.disconnect();

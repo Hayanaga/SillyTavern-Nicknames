@@ -521,10 +521,13 @@ function applyNicknameToCharItem(el, apply) {
     const chNameEl = el.querySelector('.ch_name, .dsc-row-name, .dsc-dv-name, .dsc-friend-name');
     if (!chNameEl || !(chNameEl instanceof HTMLElement)) return;
 
+    // Encontrar solo el nodo de texto puro para no borrar íconos <i>
+    let targetTextNode = Array.from(chNameEl.childNodes).reverse().find(n => n.nodeType === Node.TEXT_NODE && n.nodeValue.trim() !== '');
+
     if (!apply) {
         const original = el.dataset.nicknameOriginalName;
-        if (original !== undefined) {
-            chNameEl.textContent = original;
+        if (original !== undefined && targetTextNode) {
+            targetTextNode.nodeValue = original;
             chNameEl.removeAttribute('title');
             delete el.dataset.nicknameOriginalName;
         }
@@ -533,10 +536,11 @@ function applyNicknameToCharItem(el, apply) {
 
     let charAvatar = null;
     if (el.hasAttribute('data-chid')) {
-       const chid = Number(el.getAttribute('data-chid'));
-       charAvatar = context.characters[chid]?.avatar;
+        const chid = Number(el.getAttribute('data-chid'));
+        charAvatar = context.characters[chid]?.avatar;
     } else {
-        charAvatar = el.getAttribute('data-avatar');
+        // Soporte para data-avatar y data-key del tema
+        charAvatar = el.getAttribute('data-avatar') || el.getAttribute('data-key');
     }
 
     if (!charAvatar) return;
@@ -544,11 +548,17 @@ function applyNicknameToCharItem(el, apply) {
     const result = getNicknameForCharAvatar(charAvatar);
     if (result.context === ContextLevel.NONE) return;
 
-    if (el.dataset.nicknameOriginalName === undefined) {
-        el.dataset.nicknameOriginalName = chNameEl.textContent;
+    if (!targetTextNode) {
+        targetTextNode = document.createTextNode('');
+        chNameEl.appendChild(targetTextNode);
     }
-    chNameEl.textContent = result.name;
-    chNameEl.title = `[Character] ${el.dataset.nicknameOriginalName}`;
+
+    if (el.dataset.nicknameOriginalName === undefined) {
+        el.dataset.nicknameOriginalName = targetTextNode.nodeValue;
+    }
+
+    targetTextNode.nodeValue = result.name;
+    chNameEl.title = `[Character] ${el.dataset.nicknameOriginalName.trim()}`;
 }
 
 /**
@@ -560,10 +570,12 @@ function applyNicknameToPersonaItem(el, apply) {
     const chNameEl = el.querySelector('.ch_name, .dsc-user-name');
     if (!chNameEl || !(chNameEl instanceof HTMLElement)) return;
 
+    let targetTextNode = Array.from(chNameEl.childNodes).reverse().find(n => n.nodeType === Node.TEXT_NODE && n.nodeValue.trim() !== '');
+
     if (!apply) {
         const original = el.dataset.nicknameOriginalName;
-        if (original !== undefined) {
-            chNameEl.textContent = original;
+        if (original !== undefined && targetTextNode) {
+            targetTextNode.nodeValue = original;
             chNameEl.removeAttribute('title');
             delete el.dataset.nicknameOriginalName;
         }
@@ -571,19 +583,32 @@ function applyNicknameToPersonaItem(el, apply) {
     }
 
     const avatarId = el.getAttribute('data-avatar-id');
-    if (!avatarId) return;
+    let result;
 
-    // For persona nicknames, char-level lookup requires the active char key
-    const context = getContext();
-    const charKey = context.characters[context.characterId]?.avatar ?? null;
-    const result = getNicknameForPersonaAvatar(avatarId, charKey);
-    if (result.context === ContextLevel.NONE) return;
+    if (avatarId) {
+        const context = getContext();
+        const charKey = context.characters[context.characterId]?.avatar ?? null;
+        result = getNicknameForPersonaAvatar(avatarId, charKey);
+    } else if (el.closest('#dsc-user')) {
+        // El tema no usa data-avatar-id para el usuario, solicitamos el activo directamente
+        result = handleNickname('user');
+    } else {
+        return;
+    }
+
+    if (!result || result.context === ContextLevel.NONE) return;
+
+    if (!targetTextNode) {
+        targetTextNode = document.createTextNode('');
+        chNameEl.appendChild(targetTextNode);
+    }
 
     if (el.dataset.nicknameOriginalName === undefined) {
-        el.dataset.nicknameOriginalName = chNameEl.textContent;
+        el.dataset.nicknameOriginalName = targetTextNode.nodeValue;
     }
-    chNameEl.textContent = result.name;
-    chNameEl.title = `[Persona] ${el.dataset.nicknameOriginalName}`;
+
+    targetTextNode.nodeValue = result.name;
+    chNameEl.title = `[Persona] ${el.dataset.nicknameOriginalName.trim()}`;
 }
 
 /**
@@ -592,10 +617,10 @@ function applyNicknameToPersonaItem(el, apply) {
  */
 function patchAllListItems(apply) {
     document.querySelectorAll('#rm_print_characters_block .character_select, .dsc-dm-list .dsc-dm, .dsc-dv-card, .dsc-friend').forEach(el => {
-        applyNicknameToCharItem(/** @type {HTMLElement} */ (el), apply);
+        applyNicknameToCharItem(/** @type {HTMLElement} */(el), apply);
     });
-    document.querySelectorAll('#user_avatar_block .avatar-container').forEach(el => {
-        applyNicknameToPersonaItem(/** @type {HTMLElement} */ (el), apply);
+    document.querySelectorAll('#user_avatar_block .avatar-container, #dsc-user').forEach(el => {
+        applyNicknameToPersonaItem(/** @type {HTMLElement} */(el), apply);
     });
 }
 
@@ -605,23 +630,46 @@ function patchAllListItems(apply) {
  */
 function onCharListMutation(mutations) {
     if (!nicknameSettings.useForCharList) return;
+
+    const processedCards = new Set(); // Evita bucles infinitos en el mismo ciclo
+
     for (const mutation of mutations) {
+        // 1. Detectar si el tema actualizó el texto directamente
+        let targetElement = mutation.target.nodeType === Node.TEXT_NODE ? mutation.target.parentElement : mutation.target;
+
+        if (targetElement instanceof HTMLElement) {
+            if (targetElement.matches('.ch_name, .dsc-row-name, .dsc-dv-name, .dsc-friend-name, .dsc-user-name')) {
+                const card = targetElement.closest('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend, .avatar-container');
+                if (card && !processedCards.has(card)) {
+                    processedCards.add(card);
+                    // Determinar si es persona o personaje para aplicar la función correcta
+                    if (card.matches('.avatar-container')) {
+                        applyNicknameToPersonaItem(card, true);
+                    } else {
+                        applyNicknameToCharItem(card, true);
+                    }
+                }
+                continue;
+            }
+        }
+
+        // 2. Detectar nodos HTML nuevos (lógica original adaptada)
         for (const node of mutation.addedNodes) {
             if (!(node instanceof HTMLElement)) continue;
-            // Character list items added directly
+
             if (node.matches('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend')) {
-                applyNicknameToCharItem(node, true);
+                if (!processedCards.has(node)) applyNicknameToCharItem(node, true);
             } else {
                 node.querySelectorAll('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend').forEach(el => {
-                    applyNicknameToCharItem(/** @type {HTMLElement} */ (el), true);
+                    if (!processedCards.has(el)) applyNicknameToCharItem(/** @type {HTMLElement} */(el), true);
                 });
             }
-            // Persona list items added directly
+
             if (node.matches('.avatar-container')) {
-                applyNicknameToPersonaItem(node, true);
+                if (!processedCards.has(node)) applyNicknameToPersonaItem(node, true);
             } else {
                 node.querySelectorAll('.avatar-container').forEach(el => {
-                    applyNicknameToPersonaItem(/** @type {HTMLElement} */ (el), true);
+                    if (!processedCards.has(el)) applyNicknameToPersonaItem(/** @type {HTMLElement} */(el), true);
                 });
             }
         }
@@ -756,7 +804,7 @@ function applyNicknameToMesElement(mesEl, apply = true) {
 export function refreshChatMessages() {
     const enabled = nicknameSettings.useForChatMessages;
     document.querySelectorAll('#chat .mes').forEach(el => {
-        applyNicknameToMesElement(/** @type {HTMLElement} */ (el), enabled);
+        applyNicknameToMesElement(/** @type {HTMLElement} */(el), enabled);
     });
 }
 

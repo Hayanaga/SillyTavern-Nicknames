@@ -649,11 +649,12 @@ function onCharListMutation(mutations) {
 
         if (targetElement instanceof HTMLElement) {
             if (targetElement.matches('.ch_name, .dsc-row-name, .dsc-dv-name, .dsc-friend-name, .dsc-user-name')) {
-                const card = targetElement.closest('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend, .avatar-container');
+                // AQUÍ: Añadimos #dsc-user para que detecte tu panel de usuario
+                const card = targetElement.closest('.character_select, .dsc-dm, .dsc-dv-card, .dsc-friend, .avatar-container, #dsc-user');
                 if (card && !processedCards.has(card)) {
                     processedCards.add(card);
-                    // Determinar si es persona o personaje para aplicar la función correcta
-                    if (card.matches('.avatar-container')) {
+                    // AQUÍ: Añadimos #dsc-user para enviarlo a la función de Personas
+                    if (card.matches('.avatar-container, #dsc-user')) {
                         applyNicknameToPersonaItem(card, true);
                     } else {
                         applyNicknameToCharItem(card, true);
@@ -675,10 +676,11 @@ function onCharListMutation(mutations) {
                 });
             }
 
-            if (node.matches('.avatar-container')) {
+            // AQUÍ: Añadimos #dsc-user para nuevos renders
+            if (node.matches('.avatar-container, #dsc-user')) {
                 if (!processedCards.has(node)) applyNicknameToPersonaItem(node, true);
             } else {
-                node.querySelectorAll('.avatar-container').forEach(el => {
+                node.querySelectorAll('.avatar-container, #dsc-user').forEach(el => {
                     if (!processedCards.has(el)) applyNicknameToPersonaItem(/** @type {HTMLElement} */(el), true);
                 });
             }

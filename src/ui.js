@@ -502,6 +502,8 @@ export function registerUIEventListeners() {
     eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (/** @type {number} */ messageId) => {
         applyNicknameToMessage(messageId);
     });
+
+    refreshAllUI();
 }
 
 // ---------------------------------------------------------------------------
